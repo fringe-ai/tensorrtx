@@ -3,3 +3,11 @@
 */*.wts
 */*.ppm
 *idea*
+
+#ignore files
+*.pt
+
+#ignore folders
+*/.vscode
+*/data
+*/validation
