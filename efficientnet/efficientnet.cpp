@@ -9,10 +9,10 @@
 #include <chrono>
 #include "utils.hpp"
 
-#define USE_FP32 //USE_FP16
+#define USE_FP16 //USE_FP16
 #define INPUT_NAME "data"
 #define OUTPUT_NAME "prob"
-#define MAX_BATCH_SIZE 8
+#define MAX_BATCH_SIZE 1
 
 using namespace nvinfer1;
 static Logger gLogger;
@@ -31,7 +31,7 @@ static std::map<std::string, GlobalParams>
 	global_params_map = {
 		// input_h,input_w,num_classes,batch_norm_epsilon,
 		// width_coefficient,depth_coefficient,depth_divisor, min_depth
-		{"b0", GlobalParams{224, 224, 1000, 0.001, 1.0, 1.0, 8, -1}},
+		{"b0", GlobalParams{224, 224, 5, 0.001, 1.0, 1.0, 8, -1}},
 		{"b1", GlobalParams{240, 240, 1000, 0.001, 1.0, 1.1, 8, -1}},
 		{"b2", GlobalParams{260, 260, 1000, 0.001, 1.1, 1.2, 8, -1}},
 		{"b3", GlobalParams{300, 300, 1000, 0.001, 1.2, 1.4, 8, -1}},
@@ -264,7 +264,7 @@ int main(int argc, char **argv)
 		auto end = std::chrono::system_clock::now();
 		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 	}
-	for (unsigned int i = 0; i < 20; i++)
+	for (unsigned int i = 0; i < global_params.num_classes; i++)
 	{
 		std::cout << prob[i] << ", ";
 	}
