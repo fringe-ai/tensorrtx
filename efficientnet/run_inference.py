@@ -1,6 +1,7 @@
 """
 An example that uses TensorRT's Python api to make inferences.
 """
+from logging import raiseExceptions
 import os
 import random
 import time
@@ -245,9 +246,19 @@ class EfficientNetTRT(object):
 
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-e','--engine_file', required=True, help='the engine file path')
+    ap.add_argument('-i','--image_path', required=True, help='the path to the testing images')
+    args = vars(ap.parse_args())
     # load engine
-    engine_file_path = "./build/efficientnet-b0.engine"
-    image_dir = "./data/cropped_224x224/"
+    engine_file_path = args['engine_file']
+    image_dir = args['image_path']
+
+    if not os.path.isfile(engine_file_path):
+        raise Exception('engine file does not exist')
+    if not os.path.isdir(image_dir):
+        raise Exception('image folder does not exist')
 
     # a TRT instance
     efficientNet_wrapper = EfficientNetTRT(engine_file_path)
