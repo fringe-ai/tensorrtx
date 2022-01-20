@@ -16,7 +16,7 @@ The command below assumes that the pytorch weights `best.pt` exists in current d
 python gen_wts.py -w ./best.pt -c 5 -o ./efficientnet-b0.wts 
 ```
 
-3. **modify the settings in `efficientnet.cpp`** \
+3. **modify the settings in `efficientnet.cpp`** 
 ```c++
 #define USE_FP16 //or USE_FP32
 #define MAX_BATCH_SIZE 1
