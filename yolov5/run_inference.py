@@ -5,7 +5,7 @@ import ctypes
 import os
 import shutil
 import random
-import sys
+import argparse
 import time
 import cv2
 from skimage.io import imread
@@ -14,8 +14,8 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
-CONF_THRESH = 0.5
-IOU_THRESHOLD = 0.4
+
+PLUGIN_LIBRARY = "./build/libmyplugins.so"
 
 
 def get_img_path_batches(batch_size, img_dir):
@@ -149,14 +149,13 @@ class YoLov5TRT(object):
             batch_origin_w.append(origin_w)
             np.copyto(batch_input_image[i], input_image)
         batch_input_image = np.ascontiguousarray(batch_input_image)
-
-        # Copy input image to host buffer
-        np.copyto(host_inputs[0], batch_input_image.ravel())
         end = time.time()
         preproc_time = end - start
 
-        
         start = time.time()
+        # Copy input image to host buffer
+        np.copyto(host_inputs[0], batch_input_image.ravel())
+        
         # Transfer input data  to the GPU.
         cuda.memcpy_htod_async(cuda_inputs[0], host_inputs[0], stream)
         # Run inference.
@@ -367,25 +366,30 @@ class YoLov5TRT(object):
 
 if __name__ == "__main__":
     # load custom plugin and engine
-    PLUGIN_LIBRARY = "./build/libmyplugins.so"
-    engine_file_path = "./build/2022-01-05_640.engine"
-    image_dir = "./data/2022-01-04_640/"
-    output_dir = "./validation/2022-01-05_640"
-
-    if len(sys.argv) > 1:
-        engine_file_path = sys.argv[1]
-    if len(sys.argv) > 2:
-        PLUGIN_LIBRARY = sys.argv[2]
-
     ctypes.CDLL(PLUGIN_LIBRARY)
+    
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-e', '--engine_file', required=True, help='the engine file path')
+    ap.add_argument('-i', '--image_path', required=True, help='the test image path')
+    ap.add_argument('-c', '--class_names', required=True, help='the class names, each separated by a comma')
+    ap.add_argument('-o', '--output_path', required=True, help='the output path')
+    ap.add_argument('--conf_thresh', default=0.5, type=float, help='the confidence threshold, default=0.5')
+    ap.add_argument('--iou_thresh', default=0.4, type=float, help='the IOU threshold, default=0.4')
+    args = vars(ap.parse_args())
 
-    # load coco labels
-
-    categories = ['peeling','scuff','white']
+    # load arguments
+    CONF_THRESH = args['conf_thresh']
+    IOU_THRESHOLD = args['iou_thresh']
+    engine_file_path = args['engine_file']
+    image_dir = args['image_path']
+    output_dir = args['output_path']
+    categories = args['class_names'].split(',')
+    print('class names: ', categories)
 
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
+    
     # a YoLov5TRT instance
     yolov5_wrapper = YoLov5TRT(engine_file_path)
     try:

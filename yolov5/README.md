@@ -1,18 +1,10 @@
 # yolov5
 
-The Pytorch implementation is [ultralytics/yolov5](https://github.com/ultralytics/yolov5).
+The Pytorch implementation is `${fringe-ai}/yolov5`: https://github.com/fringe-ai/yolov5.git.
 
-## Different versions of yolov5
+## Train and Test on your own datasets
+https://github.com/fringe-ai/yolov5/blob/YJ/TRAIN_AND_TEST.md
 
-Currently, we support yolov5 v1.0, v2.0, v3.0, v3.1, v4.0, v5.0 and v6.0.
-
-- For yolov5 v6.0, download .pt from [yolov5 release v6.0](https://github.com/ultralytics/yolov5/releases/tag/v6.0), `git clone -b v6.0 https://github.com/ultralytics/yolov5.git` and `git clone https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in current page.
-- For yolov5 v5.0, download .pt from [yolov5 release v5.0](https://github.com/ultralytics/yolov5/releases/tag/v5.0), `git clone -b v5.0 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v5.0 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v5.0](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v5.0/yolov5).
-- For yolov5 v4.0, download .pt from [yolov5 release v4.0](https://github.com/ultralytics/yolov5/releases/tag/v4.0), `git clone -b v4.0 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v4.0 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v4.0](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v4.0/yolov5).
-- For yolov5 v3.1, download .pt from [yolov5 release v3.1](https://github.com/ultralytics/yolov5/releases/tag/v3.1), `git clone -b v3.1 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v3.1 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v3.1](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v3.1/yolov5).
-- For yolov5 v3.0, download .pt from [yolov5 release v3.0](https://github.com/ultralytics/yolov5/releases/tag/v3.0), `git clone -b v3.0 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v3.0 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v3.0](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v3.0/yolov5).
-- For yolov5 v2.0, download .pt from [yolov5 release v2.0](https://github.com/ultralytics/yolov5/releases/tag/v2.0), `git clone -b v2.0 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v2.0 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v2.0](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v2.0/yolov5).
-- For yolov5 v1.0, download .pt from [yolov5 release v1.0](https://github.com/ultralytics/yolov5/releases/tag/v1.0), `git clone -b v1.0 https://github.com/ultralytics/yolov5.git` and `git clone -b yolov5-v1.0 https://github.com/wang-xinyu/tensorrtx.git`, then follow how-to-run in [tensorrtx/yolov5-v1.0](https://github.com/wang-xinyu/tensorrtx/tree/yolov5-v1.0/yolov5).
 
 ## Config
 
@@ -25,48 +17,68 @@ Currently, we support yolov5 v1.0, v2.0, v3.0, v3.1, v4.0, v5.0 and v6.0.
 - BBox confidence thresh in yolov5.cpp
 - Batch size in yolov5.cpp
 
-## How to Run, yolov5s as example
 
-1. generate .wts from pytorch with .pt, or download .wts from model zoo
+## How to Run, yolov5s with your own model
 
+1. generate .wts from pytorch with .pt
+
+```bash
+#clone the YJ branch of {tensorrtx}/yolov5 repo:
+git clone -b YJ https://github.com/fringe-ai/tensorrtx.git
+
+#clone the YJ branch of {fringe-ai}/yolov5 repo:
+git clone -b YJ https://github.com/fringe-ai/yolov5.git
+
+#copy pytorch weights (best.pt) to fringe-ai yolov5 repo
+gsutil -m cp gs://engagements/nordson/chattanooga/catheter/feasibility/models/pytorch/defeat/objdet/yolov5/training/2022-01-05_640/weights/best.pt {fringe-ai}/yolov5
+
+#copy the gen_wts.py to fringe-ai yolov5 repo
+cp {tensorrtx}/yolov5/gen_wts.py {fringe-ai}/yolov5
+
+#generate a .wts file
+cd {fringe-ai}/yolov5
+python gen_wts.py -w best.pt -o 2022-01-05_640.wts
 ```
-// clone code according to above #Different versions of yolov5
-// download https://github.com/ultralytics/yolov5/releases/download/v6.0/yolov5s.pt
-cp {tensorrtx}/yolov5/gen_wts.py {ultralytics}/yolov5
-cd {ultralytics}/yolov5
-python gen_wts.py -w yolov5s.pt -o yolov5s.wts
-// a file 'yolov5s.wts' will be generated.
+
+2. modify the configs
+
+- modify the following configs in `yololayer.h`
+```c++
+static constexpr int CLASS_NUM = 3;
+static constexpr int INPUT_H = 640;  // yolov5's input height and width must be divisible by 32.
+static constexpr int INPUT_W = 640;
 ```
 
-2. build tensorrtx/yolov5 and run
-
+- modify the following configs in `yolov5.cpp`
+```c++
+#define USE_FP16  // set USE_INT8 or USE_FP16 or USE_FP32
+#define DEVICE 0  // GPU id
+#define NMS_THRESH 0.4
+#define CONF_THRESH 0.5
+#define BATCH_SIZE 1
+#define MAX_IMAGE_INPUT_SIZE_THRESH 700 * 700 // ensure it exceed the maximum size in the input images !
 ```
+
+3. build tensorrtx/yolov5 and generate tensorRT engine
+```bash
+# build tensorrtx/yolov5
 cd {tensorrtx}/yolov5/
-// update CLASS_NUM in yololayer.h if your model is trained on custom dataset
 mkdir build
 cd build
-cp {ultralytics}/yolov5/yolov5s.wts {tensorrtx}/yolov5/build
+cp {fringe-ai}/yolov5/2022-01-05_640.wts {tensorrtx}/yolov5/build
 cmake ..
 make
-sudo ./yolov5 -s [.wts] [.engine] [n/s/m/l/x/n6/s6/m6/l6/x6 or c/c6 gd gw]  // serialize model to plan file
-sudo ./yolov5 -d [.engine] [image folder]  // deserialize and run inference, the images in [image folder] will be processed.
-// For example yolov5s
-sudo ./yolov5 -s yolov5s.wts yolov5s.engine s
-sudo ./yolov5 -d yolov5s.engine ../samples
-// For example Custom model with depth_multiple=0.17, width_multiple=0.25 in yolov5.yaml
-sudo ./yolov5 -s yolov5_custom.wts yolov5.engine c 0.17 0.25
-sudo ./yolov5 -d yolov5.engine ../samples
+
+#serialize model to build the tensorRT engine
+./yolov5 -s 2022-01-05_640.wts 2022-01-05_640.engine s
 ```
 
-3. check the images generated, as follows. _zidane.jpg and _bus.jpg
-
-4. optional, load and run the tensorrt model in python
-
+4. run the inference
+```bash
+cd {tensorrtx}/yolov5
+python run_inference.py -e ./build/2022-01-05_640.engine -i ./data/2022-01-04_640 -c peeling,scuff,white -o ./validation/2022-01-05_640
 ```
-// install python-tensorrt, pycuda, etc.
-// ensure the yolov5s.engine and libmyplugins.so have been built
-python yolov5_trt.py
-```
+
 
 # INT8 Quantization
 
