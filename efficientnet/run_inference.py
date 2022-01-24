@@ -91,71 +91,56 @@ class EfficientNetTRT(object):
     def __init__(self, engine_file_path):
         # Create a Context on this device,
         self.ctx = cuda.Device(0).make_context()
-        stream = cuda.Stream()
+        self.stream = cuda.Stream()
         TRT_LOGGER = trt.Logger(trt.Logger.INFO)
         runtime = trt.Runtime(TRT_LOGGER)
 
         # Deserialize the engine from file
         with open(engine_file_path, "rb") as f:
-            engine = runtime.deserialize_cuda_engine(f.read())
-        context = engine.create_execution_context()
+            self.engine = runtime.deserialize_cuda_engine(f.read())
+        self.context = self.engine.create_execution_context()
 
-        host_inputs = []
-        cuda_inputs = []
-        host_outputs = []
-        cuda_outputs = []
-        bindings = []
+        self.batch_size = self.engine.max_batch_size
+        self.host_inputs = []
+        self.cuda_inputs = []
+        self.host_outputs = []
+        self.cuda_outputs = []
+        self.bindings = []
 
-        for binding in engine:
-            print('bingding:', binding, engine.get_binding_shape(binding))
-            size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
-            dtype = trt.nptype(engine.get_binding_dtype(binding))
+        for binding in self.engine:
+            print('bingding:', binding, self.engine.get_binding_shape(binding))
+            size = trt.volume(self.engine.get_binding_shape(binding)) * self.engine.max_batch_size
+            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
             # Allocate host and device buffers
             host_mem = cuda.pagelocked_empty(size, dtype)
             cuda_mem = cuda.mem_alloc(host_mem.nbytes)
             # Append the device buffer to device bindings.
-            bindings.append(int(cuda_mem))
+            self.bindings.append(int(cuda_mem))
             # Append to the appropriate list.
-            if engine.binding_is_input(binding):
-                self.input_w = engine.get_binding_shape(binding)[-1]
-                self.input_h = engine.get_binding_shape(binding)[-2]
-                host_inputs.append(host_mem)
-                cuda_inputs.append(cuda_mem)
+            if self.engine.binding_is_input(binding):
+                self.input_w = self.engine.get_binding_shape(binding)[-1]
+                self.input_h = self.engine.get_binding_shape(binding)[-2]
+                self.host_inputs.append(host_mem)
+                self.cuda_inputs.append(cuda_mem)
             else:
-                host_outputs.append(host_mem)
-                cuda_outputs.append(cuda_mem)
-
-        # Store
-        self.stream = stream
-        self.context = context
-        self.engine = engine
-        self.host_inputs = host_inputs
-        self.cuda_inputs = cuda_inputs
-        self.host_outputs = host_outputs
-        self.cuda_outputs = cuda_outputs
-        self.bindings = bindings
-        self.batch_size = engine.max_batch_size
+                self.host_outputs.append(host_mem)
+                self.cuda_outputs.append(cuda_mem)
         
-    
-    def softmax(self, input, axis):
+    def _softmax(self, input, axis):
         #inference functions
         exps = np.exp(input)
-        return exps/np.sum(exps, axis=axis)
-        
+        sums = np.expand_dims(np.sum(exps, axis=axis),-1)
+        return exps/sums
 
+    def _reshape_outputs(self, outputs):
+        outputs_new = np.reshape(outputs, [self.batch_size, -1])
+        return outputs_new
+        
     def infer(self, raw_image_generator):
         start = time.time()
         # Make self the active context, pushing it on top of the context stack.
         self.ctx.push()
-        # Restore
-        stream = self.stream
-        context = self.context
-        engine = self.engine
-        host_inputs = self.host_inputs
-        cuda_inputs = self.cuda_inputs
-        host_outputs = self.host_outputs
-        cuda_outputs = self.cuda_outputs
-        bindings = self.bindings
+
         # Do image preprocess
         batch_image_raw = []
         batch_origin_h = []
@@ -170,20 +155,19 @@ class EfficientNetTRT(object):
         batch_input_image = np.ascontiguousarray(batch_input_image)
 
         # Copy input image to host buffer
-        np.copyto(host_inputs[0], batch_input_image.ravel())
+        np.copyto(self.host_inputs[0], batch_input_image.ravel())
         end = time.time()
         preproc_time = end - start
-
         
         start = time.time()
         # Transfer input data  to the GPU.
-        cuda.memcpy_htod_async(cuda_inputs[0], host_inputs[0], stream)
+        cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         # Run inference.
-        context.execute_async(batch_size=self.batch_size, bindings=bindings, stream_handle=stream.handle)
+        self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
         # Transfer predictions back from the GPU.
-        cuda.memcpy_dtoh_async(host_outputs[0], cuda_outputs[0], stream)
+        cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
         # Synchronize the stream
-        stream.synchronize()
+        self.stream.synchronize()
         end = time.time()
         exec_time = end - start
 
@@ -191,7 +175,7 @@ class EfficientNetTRT(object):
         # Remove any context from the top of the context stack, deactivating it.
         self.ctx.pop()
         # Do postprocess
-        probs = self.softmax(host_outputs, axis=1)
+        probs = self._softmax(self._reshape_outputs(self.host_outputs[0]), axis=1)
         pred_id = np.argmax(probs, axis=1)
         end = time.time()
         postproc_time = end - start
