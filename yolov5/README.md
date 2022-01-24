@@ -1,4 +1,4 @@
-# yolov5
+# yolov5 implementation
 
 The Pytorch implementation is `${fringe-ai}/yolov5`: https://github.com/fringe-ai/yolov5.git.
 
@@ -65,11 +65,11 @@ static constexpr int INPUT_W = 640;
 cd {tensorrtx}/yolov5/
 mkdir build
 cd build
-cp {fringe-ai}/yolov5/2022-01-05_640.wts {tensorrtx}/yolov5/build
 cmake ..
 make
 
-#serialize model to build the tensorRT engine
+#serialize model and weights to build the tensorRT engine
+cp {fringe-ai}/yolov5/2022-01-05_640.wts .
 ./yolov5 -s 2022-01-05_640.wts 2022-01-05_640.engine s
 ```
 
