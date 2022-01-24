@@ -30,6 +30,7 @@ def get_img_path_batches(batch_size, img_dir):
         raise Exception(f'cannot load the class_map.json in {img_dir}')
 
     # load images with class id
+    cnt_images = 0
     for root, dirs, _files in os.walk(img_dir):
         for dir in dirs:
             label = class_to_id[dir]
@@ -41,6 +42,8 @@ def get_img_path_batches(batch_size, img_dir):
                     batch_label = []
                 batch.append(os.path.join(root, dir, file))
                 batch_label.append(label)
+                cnt_images += 1
+    print(f'loaded {cnt_images} images')
     if len(batch) > 0:
         ret.append(batch)
         ret_label.append(batch_label)
