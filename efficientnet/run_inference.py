@@ -103,7 +103,7 @@ class EfficientNetTRT(object):
             self.engine = runtime.deserialize_cuda_engine(f.read())
         self.context = self.engine.create_execution_context()
 
-        self.batch_size = self.engine.max_batch_size
+        self.batch_max_size = self.engine.max_batch_size
         self.host_inputs = []
         self.cuda_inputs = []
         self.host_outputs = []
@@ -136,11 +136,14 @@ class EfficientNetTRT(object):
         return exps/sums
 
     def _reshape_outputs(self, outputs):
-        outputs_new = np.reshape(outputs, [self.batch_size, -1])
+        outputs_new = np.reshape(outputs, [self.batch_max_size, -1])
         return outputs_new
         
     def infer(self, raw_image_generator):
         start = time.time()
+        raw_images = list(raw_image_generator)
+        batch_size = len(raw_images)
+        
         # Make self the active context, pushing it on top of the context stack.
         self.ctx.push()
 
@@ -148,8 +151,8 @@ class EfficientNetTRT(object):
         batch_image_raw = []
         batch_origin_h = []
         batch_origin_w = []
-        batch_input_image = np.empty(shape=[self.batch_size, 3, self.input_h, self.input_w])
-        for i, image_raw in enumerate(raw_image_generator):
+        batch_input_image = np.empty(shape=[self.batch_max_size, 3, self.input_h, self.input_w])
+        for i, image_raw in enumerate(raw_images):
             input_image, image_raw, origin_h, origin_w = self.preprocess_image(image_raw)
             batch_image_raw.append(image_raw)
             batch_origin_h.append(origin_h)
@@ -166,7 +169,7 @@ class EfficientNetTRT(object):
         # Transfer input data  to the GPU.
         cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         # Run inference.
-        self.context.execute_async(batch_size=self.batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        self.context.execute_async(batch_size=batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
         # Transfer predictions back from the GPU.
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
         # Synchronize the stream
@@ -199,7 +202,7 @@ class EfficientNetTRT(object):
         """
         description: Ready data for warmup
         """
-        for _ in range(self.batch_size):
+        for _ in range(self.batch_max_size):
             yield np.zeros([self.input_h, self.input_w, 3], dtype=np.uint8)
 
     def preprocess_image(self, image_raw):
@@ -250,12 +253,12 @@ if __name__ == "__main__":
     # a TRT instance
     efficientNet_wrapper = EfficientNetTRT(engine_file_path)
     try:
-        print('batch size is', efficientNet_wrapper.batch_size)
+        print('batch size is', efficientNet_wrapper.batch_max_size)
 
         #warm up 10 times
         for i in range(10):
             _, use_time = efficientNet_wrapper.infer(efficientNet_wrapper.get_raw_image_zeros())
-            print('warm_up->{}, time->{:.2f}ms'.format([efficientNet_wrapper.batch_size, 3, efficientNet_wrapper.input_h, efficientNet_wrapper.input_w], use_time['exec']))
+            print('warm_up->{}, time->{:.2f}ms'.format([efficientNet_wrapper.batch_max_size, 3, efficientNet_wrapper.input_h, efficientNet_wrapper.input_w], use_time['exec']))
         
         #do inference
         total = 0
@@ -263,7 +266,7 @@ if __name__ == "__main__":
         proc_times = []
         pre_times = []
         post_times = []
-        batches,labels = get_img_path_batches(efficientNet_wrapper.batch_size, image_dir)
+        batches,labels = get_img_path_batches(efficientNet_wrapper.batch_max_size, image_dir)
         for batch,labels in zip(batches,labels):
             preds, use_time = efficientNet_wrapper.infer(efficientNet_wrapper.get_raw_image(batch))
             pred_ids = preds['cls_id']
