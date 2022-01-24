@@ -141,9 +141,6 @@ class EfficientNetTRT(object):
         
     def infer(self, raw_image_generator):
         start = time.time()
-        raw_images = list(raw_image_generator)
-        batch_size = len(raw_images)
-        
         # Make self the active context, pushing it on top of the context stack.
         self.ctx.push()
 
@@ -152,12 +149,14 @@ class EfficientNetTRT(object):
         batch_origin_h = []
         batch_origin_w = []
         batch_input_image = np.empty(shape=[self.batch_max_size, 3, self.input_h, self.input_w])
-        for i, image_raw in enumerate(raw_images):
+        batch_size = 0
+        for i, image_raw in enumerate(raw_image_generator):
             input_image, image_raw, origin_h, origin_w = self.preprocess_image(image_raw)
             batch_image_raw.append(image_raw)
             batch_origin_h.append(origin_h)
             batch_origin_w.append(origin_w)
             np.copyto(batch_input_image[i], input_image)
+            batch_size += 1
         batch_input_image = np.ascontiguousarray(batch_input_image)
 
         # Copy input image to host buffer
