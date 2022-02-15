@@ -23,11 +23,11 @@ https://github.com/fringe-ai/yolov5/blob/YJ/TRAIN_AND_TEST.md
 1. generate .wts from pytorch with .pt
 
 ```bash
-#clone the YJ branch of {tensorrtx}/yolov5 repo:
-git clone -b YJ https://github.com/fringe-ai/tensorrtx.git
+#clone the {tensorrtx}/yolov5 repo:
+git clone https://github.com/fringe-ai/tensorrtx.git
 
-#clone the YJ branch of {fringe-ai}/yolov5 repo:
-git clone -b YJ https://github.com/fringe-ai/yolov5.git
+#clone the {fringe-ai}/yolov5 repo:
+git clone https://github.com/fringe-ai/yolov5.git
 
 #copy pytorch weights (best.pt) to fringe-ai yolov5 repo
 gsutil -m cp gs://engagements/nordson/chattanooga/catheter/feasibility/models/pytorch/defeat/objdet/yolov5/training/2022-01-05_640/weights/best.pt {fringe-ai}/yolov5
