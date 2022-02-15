@@ -5,22 +5,24 @@ import ctypes
 import os
 import shutil
 import random
-import sys
-import threading
+import argparse
 import time
 import cv2
+from skimage.io import imread
 import numpy as np
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
-CONF_THRESH = 0.5
-IOU_THRESHOLD = 0.4
+
+PLUGIN_LIBRARY = "./build/libmyplugins.so"
+MAX_OUTPUT_BBOX_COUNT = 1000 #must match with 'MAX_OUTPUT_BBOX_COUNT' in the yololayer.h
 
 
 def get_img_path_batches(batch_size, img_dir):
     ret = []
     batch = []
+    cnt_images = 0
     for root, dirs, files in os.walk(img_dir):
         for name in files:
             if name.find('.png')==-1:
@@ -29,6 +31,8 @@ def get_img_path_batches(batch_size, img_dir):
                 ret.append(batch)
                 batch = []
             batch.append(os.path.join(root, name))
+            cnt_images += 1
+    print(f'loaded {cnt_images} images')
     if len(batch) > 0:
         ret.append(batch)
     return ret
@@ -78,97 +82,86 @@ class YoLov5TRT(object):
     def __init__(self, engine_file_path):
         # Create a Context on this device,
         self.ctx = cuda.Device(0).make_context()
-        stream = cuda.Stream()
+        self.stream = cuda.Stream()
         TRT_LOGGER = trt.Logger(trt.Logger.INFO)
         runtime = trt.Runtime(TRT_LOGGER)
 
         # Deserialize the engine from file
         with open(engine_file_path, "rb") as f:
-            engine = runtime.deserialize_cuda_engine(f.read())
-        context = engine.create_execution_context()
+            self.engine = runtime.deserialize_cuda_engine(f.read())
+        self.context = self.engine.create_execution_context()
 
-        host_inputs = []
-        cuda_inputs = []
-        host_outputs = []
-        cuda_outputs = []
-        bindings = []
+        self.batch_max_size = self.engine.max_batch_size
+        self.host_inputs = []
+        self.cuda_inputs = []
+        self.host_outputs = []
+        self.cuda_outputs = []
+        self.bindings = []
 
-        for binding in engine:
-            print('bingding:', binding, engine.get_binding_shape(binding))
-            size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
-            dtype = trt.nptype(engine.get_binding_dtype(binding))
+        for binding in self.engine:
+            print('bingding:', binding, self.engine.get_binding_shape(binding))
+            size = trt.volume(self.engine.get_binding_shape(binding)) * self.engine.max_batch_size
+            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
             # Allocate host and device buffers
             host_mem = cuda.pagelocked_empty(size, dtype)
             cuda_mem = cuda.mem_alloc(host_mem.nbytes)
             # Append the device buffer to device bindings.
-            bindings.append(int(cuda_mem))
+            self.bindings.append(int(cuda_mem))
             # Append to the appropriate list.
-            if engine.binding_is_input(binding):
-                self.input_w = engine.get_binding_shape(binding)[-1]
-                self.input_h = engine.get_binding_shape(binding)[-2]
-                host_inputs.append(host_mem)
-                cuda_inputs.append(cuda_mem)
+            if self.engine.binding_is_input(binding):
+                self.input_w = self.engine.get_binding_shape(binding)[-1]
+                self.input_h = self.engine.get_binding_shape(binding)[-2]
+                self.host_inputs.append(host_mem)
+                self.cuda_inputs.append(cuda_mem)
             else:
-                host_outputs.append(host_mem)
-                cuda_outputs.append(cuda_mem)
-
-        # Store
-        self.stream = stream
-        self.context = context
-        self.engine = engine
-        self.host_inputs = host_inputs
-        self.cuda_inputs = cuda_inputs
-        self.host_outputs = host_outputs
-        self.cuda_outputs = cuda_outputs
-        self.bindings = bindings
-        self.batch_size = engine.max_batch_size
-
+                self.host_outputs.append(host_mem)
+                self.cuda_outputs.append(cuda_mem)
+        
     def infer(self, raw_image_generator):
-        threading.Thread.__init__(self)
+        start = time.time()
         # Make self the active context, pushing it on top of the context stack.
         self.ctx.push()
-        # Restore
-        stream = self.stream
-        context = self.context
-        engine = self.engine
-        host_inputs = self.host_inputs
-        cuda_inputs = self.cuda_inputs
-        host_outputs = self.host_outputs
-        cuda_outputs = self.cuda_outputs
-        bindings = self.bindings
         # Do image preprocess
         batch_image_raw = []
         batch_origin_h = []
         batch_origin_w = []
-        batch_input_image = np.empty(shape=[self.batch_size, 3, self.input_h, self.input_w])
+        batch_input_image = np.empty(shape=[self.batch_max_size, 3, self.input_h, self.input_w])
+        batch_size = 0
         for i, image_raw in enumerate(raw_image_generator):
             input_image, image_raw, origin_h, origin_w = self.preprocess_image(image_raw)
             batch_image_raw.append(image_raw)
             batch_origin_h.append(origin_h)
             batch_origin_w.append(origin_w)
             np.copyto(batch_input_image[i], input_image)
+            batch_size += 1
         batch_input_image = np.ascontiguousarray(batch_input_image)
-
-        # Copy input image to host buffer
-        np.copyto(host_inputs[0], batch_input_image.ravel())
-        start = time.time()
-        # Transfer input data  to the GPU.
-        cuda.memcpy_htod_async(cuda_inputs[0], host_inputs[0], stream)
-        # Run inference.
-        context.execute_async(batch_size=self.batch_size, bindings=bindings, stream_handle=stream.handle)
-        # Transfer predictions back from the GPU.
-        cuda.memcpy_dtoh_async(host_outputs[0], cuda_outputs[0], stream)
-        # Synchronize the stream
-        stream.synchronize()
         end = time.time()
+        preproc_time = end - start
+
+        start = time.time()
+        # Copy input image to host buffer
+        np.copyto(self.host_inputs[0], batch_input_image.ravel())
+        
+        # Transfer input data  to the GPU.
+        cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
+        # Run inference.
+        self.context.execute_async(batch_size=batch_size, bindings=self.bindings, stream_handle=self.stream.handle)
+        # Transfer predictions back from the GPU.
+        cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
+        # Synchronize the stream
+        self.stream.synchronize()
+        end = time.time()
+        exec_time = end - start
+
+        start = time.time()
         # Remove any context from the top of the context stack, deactivating it.
         self.ctx.pop()
         # Here we use the first row of output in that batch_size = 1
-        output = host_outputs[0]
+        output = self.host_outputs[0]
         # Do postprocess
-        for i in range(self.batch_size):
+        for i in range(batch_size):
             result_boxes, result_scores, result_classid = self.post_process(
-                output[i * 6001: (i + 1) * 6001], batch_origin_h[i], batch_origin_w[i]
+                output[i * (6*MAX_OUTPUT_BBOX_COUNT + 1): (i + 1) * (6*MAX_OUTPUT_BBOX_COUNT + 1)], batch_origin_h[i], batch_origin_w[i]
             )
             # Draw rectangles and labels on the original image
             for j in range(len(result_boxes)):
@@ -180,7 +173,9 @@ class YoLov5TRT(object):
                         categories[int(result_classid[j])], result_scores[j]
                     ),
                 )
-        return batch_image_raw, end - start
+        end = time.time()
+        postproc_time = end - start
+        return batch_image_raw, {'pre':preproc_time*1000, 'exec':exec_time*1000, 'post':postproc_time*1000}
 
     def destroy(self):
         # Remove any context from the top of the context stack, deactivating it.
@@ -191,16 +186,16 @@ class YoLov5TRT(object):
         description: Read an image from image path
         """
         for img_path in image_path_batch:
-            yield cv2.imread(img_path)
+            yield imread(img_path)
         
     def get_raw_image_zeros(self, image_path_batch=None):
         """
         description: Ready data for warmup
         """
-        for _ in range(self.batch_size):
+        for _ in range(self.batch_max_size):
             yield np.zeros([self.input_h, self.input_w, 3], dtype=np.uint8)
 
-    def preprocess_image(self, raw_bgr_image):
+    def preprocess_image(self, image_raw):
         """
         description: Convert BGR image to RGB,
                      resize and pad it to target size, normalize to [0,1],
@@ -213,31 +208,11 @@ class YoLov5TRT(object):
             h: original height
             w: original width
         """
-        image_raw = raw_bgr_image
         h, w, c = image_raw.shape
-        image = cv2.cvtColor(image_raw, cv2.COLOR_BGR2RGB)
-        # Calculate widht and height and paddings
-        r_w = self.input_w / w
-        r_h = self.input_h / h
-        if r_h > r_w:
-            tw = self.input_w
-            th = int(r_w * h)
-            tx1 = tx2 = 0
-            ty1 = int((self.input_h - th) / 2)
-            ty2 = self.input_h - th - ty1
-        else:
-            tw = int(r_h * w)
-            th = self.input_h
-            tx1 = int((self.input_w - tw) / 2)
-            tx2 = self.input_w - tw - tx1
-            ty1 = ty2 = 0
-        # Resize the image with long side while maintaining ratio
-        image = cv2.resize(image, (tw, th))
-        # Pad the short side with (128,128,128)
-        image = cv2.copyMakeBorder(
-            image, ty1, ty2, tx1, tx2, cv2.BORDER_CONSTANT, None, (128, 128, 128)
-        )
-        image = image.astype(np.float32)
+        assert h==self.input_h
+        assert w==self.input_w
+
+        image = image_raw.astype(np.float32)
         # Normalize to [0,1]
         image /= 255.0
         # HWC to CHW format:
@@ -375,70 +350,65 @@ class YoLov5TRT(object):
         return boxes
 
 
-class inferThread(threading.Thread):
-    def __init__(self, yolov5_wrapper, image_path_batch):
-        threading.Thread.__init__(self)
-        self.yolov5_wrapper = yolov5_wrapper
-        self.image_path_batch = image_path_batch
-
-    def run(self):
-        batch_image_raw, use_time = self.yolov5_wrapper.infer(self.yolov5_wrapper.get_raw_image(self.image_path_batch))
-        for i, img_path in enumerate(self.image_path_batch):
-            parent, filename = os.path.split(img_path)
-            save_name = os.path.join('output', filename)
-            # Save image
-            cv2.imwrite(save_name, batch_image_raw[i])
-        print('input->{}, time->{:.2f}ms, saving into output/'.format(self.image_path_batch, use_time * 1000))
-
-
-class warmUpThread(threading.Thread):
-    def __init__(self, yolov5_wrapper):
-        threading.Thread.__init__(self)
-        self.yolov5_wrapper = yolov5_wrapper
-
-    def run(self):
-        batch_image_raw, use_time = self.yolov5_wrapper.infer(self.yolov5_wrapper.get_raw_image_zeros())
-        print('warm_up->{}, time->{:.2f}ms'.format(batch_image_raw[0].shape, use_time * 1000))
-
-
-
 if __name__ == "__main__":
     # load custom plugin and engine
-    PLUGIN_LIBRARY = "build/libmyplugins.so"
-    engine_file_path = "build/2022-01-05_640.engine"
-    image_dir = "2022-01-04_640/"
-
-    if len(sys.argv) > 1:
-        engine_file_path = sys.argv[1]
-    if len(sys.argv) > 2:
-        PLUGIN_LIBRARY = sys.argv[2]
-
     ctypes.CDLL(PLUGIN_LIBRARY)
+    
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-e', '--engine_file', required=True, help='the engine file path')
+    ap.add_argument('-i', '--image_path', required=True, help='the test image path')
+    ap.add_argument('-c', '--class_names', required=True, help='the class names, each separated by a comma')
+    ap.add_argument('-o', '--output_path', required=True, help='the output path')
+    ap.add_argument('--conf_thresh', default=0.5, type=float, help='the confidence threshold, default=0.5')
+    ap.add_argument('--iou_thresh', default=0.4, type=float, help='the IOU threshold, default=0.4')
+    args = vars(ap.parse_args())
 
-    # load coco labels
+    # load arguments
+    CONF_THRESH = args['conf_thresh']
+    IOU_THRESHOLD = args['iou_thresh']
+    engine_file_path = args['engine_file']
+    image_dir = args['image_path']
+    output_dir = args['output_path']
+    categories = args['class_names'].split(',')
+    print('class names: ', categories)
 
-    categories = ['peeling','scuff','white']
-
-    if os.path.exists('output/'):
-        shutil.rmtree('output/')
-    os.makedirs('output/')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
+    
     # a YoLov5TRT instance
     yolov5_wrapper = YoLov5TRT(engine_file_path)
     try:
-        print('batch size is', yolov5_wrapper.batch_size)
-        
-        image_path_batches = get_img_path_batches(yolov5_wrapper.batch_size, image_dir)
+        print('batch size is', yolov5_wrapper.batch_max_size)
 
+        #warm up 10 times
         for i in range(10):
-            # create a new thread to do warm_up
-            thread1 = warmUpThread(yolov5_wrapper)
-            thread1.start()
-            thread1.join()
+            batch_image_raw, use_time = yolov5_wrapper.infer(yolov5_wrapper.get_raw_image_zeros())
+            print('warm_up->{}, time->{:.2f}ms'.format(batch_image_raw[0].shape, use_time['exec']))
+        
+        #do inference
+        proc_times = []
+        pre_times = []
+        post_times = []
+        image_path_batches = get_img_path_batches(yolov5_wrapper.batch_max_size, image_dir)
         for batch in image_path_batches:
-            # create a new thread to do inference
-            thread1 = inferThread(yolov5_wrapper, batch)
-            thread1.start()
-            thread1.join()
+            batch_image_raw, use_time = yolov5_wrapper.infer(yolov5_wrapper.get_raw_image(batch))
+            for i, img_path in enumerate(batch):
+                # Save image
+                parent, filename = os.path.split(img_path)
+                save_name = os.path.join(output_dir, filename)
+                cv2.imwrite(save_name, batch_image_raw[i])
+            print('input->{}, exec time->{:.2f}ms, saving into output_dir'.format(batch, use_time['exec']))
+            pre_times.append(use_time['pre'])
+            proc_times.append(use_time['exec'])
+            post_times.append(use_time['post'])
+        pre_times = np.array(pre_times)
+        proc_times = np.array(proc_times)
+        post_times = np.array(post_times)
+        print('[INFO] mean proc time: {:.2f}ms'.format(proc_times.mean()))
+        print('[INFO] max proc time: {:.2f}ms'.format(proc_times.max()))
+        print('[INFO] min proc time: {:.2f}ms'.format(proc_times.min()))
+        print('[INFO] mean preproc time: {:.2f}ms, mean postproc time: {:.2f}ms'.format(pre_times.mean(), post_times.mean()))
     finally:
         # destroy the instance
         yolov5_wrapper.destroy()
