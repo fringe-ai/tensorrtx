@@ -24,10 +24,10 @@ https://github.com/fringe-ai/yolov5/blob/YJ/TRAIN_AND_TEST.md
 
 ```bash
 #clone the {tensorrtx}/yolov5 repo:
-git clone https://github.com/fringe-ai/tensorrtx.git
+git clone https://github.com/lmitechnologies/tensorrtx.git
 
 #clone the {fringe-ai}/yolov5 repo:
-git clone https://github.com/fringe-ai/yolov5.git
+git clone https://github.com/lmitechnologies/yolov5.git
 
 #copy pytorch weights (best.pt) to fringe-ai yolov5 repo
 gsutil -m cp gs://engagements/nordson/chattanooga/catheter/feasibility/models/pytorch/defeat/objdet/yolov5/training/2022-01-05_640/weights/best.pt {fringe-ai}/yolov5
