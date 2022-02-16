@@ -8,7 +8,6 @@ import random
 import argparse
 import time
 import cv2
-from skimage.io import imread
 import numpy as np
 import pycuda.autoinit
 import pycuda.driver as cuda
@@ -186,7 +185,7 @@ class YoLov5TRT(object):
         description: Read an image from image path
         """
         for img_path in image_path_batch:
-            yield imread(img_path)
+            yield cv2.imread(img_path)
         
     def get_raw_image_zeros(self, image_path_batch=None):
         """
