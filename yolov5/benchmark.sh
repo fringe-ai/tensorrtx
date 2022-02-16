@@ -1,8 +1,7 @@
 #!/bin/bash
 
-#NOTE: Activate the python virtual environment FIRST
-
-#Activate the yolo environment, you may want to modify the yolov5 repo path
+#Activate the yolo environments, you may want to modify the repo paths
+source ~/projects/venv_pipeline/bin/activate
 source ~/projects/yolov5/yolo.env
 
 #----------------------------------------------------------
@@ -11,9 +10,10 @@ DATA_PATH='./data/pad_to_640'
 CLASSES='sausage,cojoin,underfill,filling,misform'
 WEIGHTS_PATH='./trained-inference-models/2022-02-13'
 PROJECT_NAME='2022-02-13'
-MODEL='x'
+MODEL='s'
 #----------------------------------------------------------
 
+#intermediate folder names
 OUTPUT_PATH='./validation'
 OUT_NAME="$PROJECT_NAME"_"$MODEL"
 
