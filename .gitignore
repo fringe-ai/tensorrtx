@@ -6,6 +6,7 @@
 
 #ignore files
 *.pt
+*.engine
 
 #ignore folders
 */.vscode
