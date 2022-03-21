@@ -11,11 +11,11 @@
 #define USE_FP16  // set USE_INT8 or USE_FP16 or USE_FP32
 #define DEVICE 0  // GPU id
 #define BATCH_SIZE 1
-#define MAX_IMAGE_INPUT_SIZE_THRESH 700 * 700 // ensure it exceed the maximum size in the input images !
 
 //ignore these if run inference using python
 #define NMS_THRESH 0.4 
 #define CONF_THRESH 0.5
+#define MAX_IMAGE_INPUT_SIZE_THRESH 700 * 700 // ensure it exceed the maximum size in the input images !
 
 // stuff we know about the network and the input/output blobs
 static const int INPUT_H = Yolo::INPUT_H;
