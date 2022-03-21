@@ -14,7 +14,6 @@ import pycuda.driver as cuda
 import tensorrt as trt
 
 
-PLUGIN_LIBRARY = "./build/libmyplugins.so"
 MAX_OUTPUT_BBOX_COUNT = 1000 #must match with 'MAX_OUTPUT_BBOX_COUNT' in the yololayer.h
 
 
@@ -351,10 +350,9 @@ class YoLov5TRT(object):
 
 if __name__ == "__main__":
     # load custom plugin and engine
-    ctypes.CDLL(PLUGIN_LIBRARY)
-    
     ap = argparse.ArgumentParser()
     ap.add_argument('-e', '--engine_file', required=True, help='the engine file path')
+    ap.add_argument('-p', '--plugin_folder', required=True, help='the folder contain the plugins, such as "libmyplugins.so"')
     ap.add_argument('-i', '--image_path', required=True, help='the test image path')
     ap.add_argument('-c', '--class_names', required=True, help='the class names, each separated by a comma')
     ap.add_argument('-o', '--output_path', required=True, help='the output path')
@@ -363,6 +361,8 @@ if __name__ == "__main__":
     args = vars(ap.parse_args())
 
     # load arguments
+    PLUGIN_LIBRARY = os.path.join(args['plugin_folder'],"libmyplugins.so")
+    ctypes.CDLL(PLUGIN_LIBRARY)
     CONF_THRESH = args['conf_thresh']
     IOU_THRESHOLD = args['iou_thresh']
     engine_file_path = args['engine_file']
