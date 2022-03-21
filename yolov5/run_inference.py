@@ -371,9 +371,8 @@ if __name__ == "__main__":
     categories = args['class_names'].split(',')
     print('class names: ', categories)
 
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(output_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     
     # a YoLov5TRT instance
     yolov5_wrapper = YoLov5TRT(engine_file_path)
