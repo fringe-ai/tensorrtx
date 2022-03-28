@@ -215,6 +215,8 @@ class YoLov5TRT(object):
         image /= 255.0
         # HWC to CHW format:
         image = np.transpose(image, [2, 0, 1])
+        #BGR to RGB
+        image = image[::-1]
         # CHW to NCHW format
         image = np.expand_dims(image, axis=0)
         # Convert the image to row-major order, also known as "C order":
@@ -356,13 +358,15 @@ if __name__ == "__main__":
     ap.add_argument('-i', '--image_path', required=True, help='the test image path')
     ap.add_argument('-c', '--class_names', required=True, help='the class names, each separated by a comma')
     ap.add_argument('-o', '--output_path', required=True, help='the output path')
-    ap.add_argument('--conf_thresh', default=0.5, type=float, help='the confidence threshold, default=0.5')
+    ap.add_argument('--conf_thresh', default=0.25, type=float, help='the confidence threshold, default=0.25')
     ap.add_argument('--iou_thresh', default=0.4, type=float, help='the IOU threshold, default=0.4')
     args = vars(ap.parse_args())
 
     # load arguments
-    PLUGIN_LIBRARY = os.path.join(args['plugin_folder'],"libmyplugins.so")
-    ctypes.CDLL(PLUGIN_LIBRARY)
+    plugin_file = os.path.join(args['plugin_folder'],"libmyplugins.so")
+    if not os.path.isfile(plugin_file):
+        raise Exception(f'Not found plugin file: {plugin_file}')
+    ctypes.CDLL(plugin_file)
     CONF_THRESH = args['conf_thresh']
     IOU_THRESHOLD = args['iou_thresh']
     engine_file_path = args['engine_file']
@@ -370,7 +374,10 @@ if __name__ == "__main__":
     output_dir = args['output_path']
     categories = args['class_names'].split(',')
     print('class names: ', categories)
-
+    
+    if not os.path.isfile(engine_file_path):
+        raise Exception(f'Not found plugin file: {engine_file_path}')
+    
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     

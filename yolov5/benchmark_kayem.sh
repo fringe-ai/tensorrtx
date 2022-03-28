@@ -6,7 +6,7 @@ source ~/projects/yolov5/yolo.env
 
 #----------------------------------------------------------
 # arguments
-DATA_PATH='./data/split_640_0.2/test'
+DATA_PATH='./data/kayem_split_640_0.2/test'
 BUILD_PATH='./build_kayem'
 CLASSES='filling,sausage,underfill,cojoin,misform'
 WEIGHTS_PATH='./trained-inference-models/2022-02-17'
@@ -24,6 +24,9 @@ do
     echo
     echo $out_name
 
+    #create folder
+    mkdir -p "$out_folder"
+
     #Genrate the weights
     if [ ! -f "$out_name".wts ]; then
         echo "generating the weights file"
@@ -35,12 +38,12 @@ do
 
     #Build engine
     if [ ! -f "$out_name".engine ]; then
-        ./"$BUILD_PATH"/yolov5 -s "$out_name".wts "$out_name".engine "$MODEL"
+        "$BUILD_PATH"/yolov5 -s "$out_name".wts "$out_name".engine "$MODEL"
     else
         echo "found the file: ""$out_name".engine
         echo "skip"
     fi
 
     #RUN inference
-    python run_inference.py -e "$out_name".engine -i "$DATA_PATH" -p "$BUILD_PATH" -c "$CLASSES" -o "$out_name"
+    python run_inference.py -e "$out_name".engine -i "$DATA_PATH" -p "$BUILD_PATH" -c "$CLASSES" -o "$out_folder"
 done
