@@ -16,9 +16,11 @@ yolo_repo_path = '$HOME/projects/yolov5'
 with open(config_file) as f:
     dt = yaml.safe_load(f)
     model = dt['YOLO']['model']
-    print(f'loaded YOLO model: {model}')
-if f'_{model}'!=model_name.split('_')[-1]:
+    print(f'loaded YOLO model from yaml: {model}')
+if f'{model}'!=model_name.split('_')[-1]:
     model_name += f'_{model}'
+    print(f'append model {model} to the model name: {model_name}')
+    
 out_folder = os.path.join(output_path, model_name)
 out_name = os.path.join(out_folder, model_name)
 
