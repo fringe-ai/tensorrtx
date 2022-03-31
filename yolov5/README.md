@@ -1,83 +1,69 @@
-# yolov5 implementation
+# yolov5 Pytorch to TensorRT 
 
-The Pytorch implementation is `${fringe-ai}/yolov5`: https://github.com/fringe-ai/yolov5.git.
+The Pytorch implementation is `${lmi}/yolov5`: https://github.com/lmitechnologies/yolov5.
 
 ## Train and Test on your own datasets
-https://github.com/fringe-ai/yolov5/blob/YJ/TRAIN_AND_TEST.md
+https://github.com/lmitechnologies/yolov5/blob/master/TRAIN_AND_TEST.md
 
 
-## Config
+## How to convert trained yolo model to tensorRT
+The followings assume that the current working directory is `~/projects`, and the trained yolo weights are saved as `~/projects/best.pt`.
 
-- Choose the model n/s/m/l/x/n6/s6/m6/l6/x6 from command line arguments.
-- Input shape defined in yololayer.h
-- Number of classes defined in yololayer.h, **DO NOT FORGET TO ADAPT THIS, If using your own model**
-- INT8/FP16/FP32 can be selected by the macro in yolov5.cpp, **INT8 need more steps, pls follow `How to Run` first and then go the `INT8 Quantization` below**
-- GPU id can be selected by the macro in yolov5.cpp
-- NMS thresh in yolov5.cpp
-- BBox confidence thresh in yolov5.cpp
-- Batch size in yolov5.cpp
-
-
-## How to Run, yolov5s with your own model
-
-1. generate .wts from pytorch with .pt
-
+1. Clone the repos
 ```bash
-#clone the {tensorrtx}/yolov5 repo:
+# cd to your working directory
+cd ~/projects
+
+# clone the {tensorrtx}/yolov5 repo:
 git clone https://github.com/lmitechnologies/tensorrtx.git
 
-#clone the {fringe-ai}/yolov5 repo:
+# clone the {lmi}/yolov5 repo:
 git clone https://github.com/lmitechnologies/yolov5.git
-
-#copy pytorch weights (best.pt) to fringe-ai yolov5 repo
-gsutil -m cp gs://engagements/nordson/chattanooga/catheter/feasibility/models/pytorch/defeat/objdet/yolov5/training/2022-01-05_640/weights/best.pt {fringe-ai}/yolov5
-
-#copy the gen_wts.py to fringe-ai yolov5 repo
-cp {tensorrtx}/yolov5/gen_wts.py {fringe-ai}/yolov5
-
-#generate a .wts file
-cd {fringe-ai}/yolov5
-python gen_wts.py -w best.pt -o 2022-01-05_640.wts
 ```
 
-2. modify the configs
+2. Generate `example.wts` from pytorch weights `best.pt`
 
-- modify the following configs in `yololayer.h`
-```c++
-static constexpr int CLASS_NUM = 3;
-static constexpr int INPUT_H = 640;  // yolov5's input height and width must be divisible by 32.
-static constexpr int INPUT_W = 640;
-```
-
-- modify the following configs in `yolov5.cpp`
-```c++
-#define USE_FP16  // set USE_INT8 or USE_FP16 or USE_FP32
-#define DEVICE 0  // GPU id
-#define BATCH_SIZE 1
-```
-
-3. build tensorrtx/yolov5 and generate tensorRT engine
 ```bash
-# build tensorrtx/yolov5
-cd {tensorrtx}/yolov5/
+# activate the yolo env
+source yolov5/yolo.env
+
+# generate a .wts file
+python3 -m gen_wts.py -w best.pt -o example.wts
+```
+
+3. Modify the yaml config
+
+Use [configs/example.yaml](https://github.com/lmitechnologies/tensorrtx/blob/master/yolov5/configs/example.yaml) as a template for creating your own config file. The followings show you what is inside that yaml.
+```yaml
+YOLO:
+  model: s # model types: [n/s/m/l/x/n6/s6/m6/l6/x6] or [c/c6 gd gw]
+  input_h: 256
+  input_w: 1024
+  num_classes: 3
+  batch_size: 1
+```
+Create your own config file and save it as `~/projects/example.yaml`.
+
+4. build `{tensorrtx}/yolov5` and generate tensorRT engine
+```bash
 mkdir build
 cd build
-cmake ..
+cmake ../tensorrtx/yolov5
 make
 
-#serialize model and weights to build the tensorRT engine
-cp {fringe-ai}/yolov5/2022-01-05_640.wts .
-./yolov5 -s 2022-01-05_640.wts 2022-01-05_640.engine s
+#build the tensorRT engine
+cd ..
+./build/yolov5 '-c' example.yaml '-w' example.wts '-o' ./build/out.engine
 ```
+The engine is saved as `./build/out.engine`.
 
-4. run the inference
+5. run the inference
 ```bash
-cd {tensorrtx}/yolov5
-python run_inference.py -e ./build/2022-01-05_640.engine -i ./data/2022-01-04_640 -c peeling,scuff,white -o ./validation/2022-01-05_640
+python3 tensorrtx/yolov5/run_inference.py -e ./build/out.engine -p ./build -i DATA_PATH -c CLASS_NAMES -o DESTINATION
 ```
+where `DATA_PATH` is the path to the image folder, `CLASS_NAMES` is a string containing all class names separated by a comma, `DESTINATION` is the output path.
 
-
-# INT8 Quantization
+# INT8 Quantization (haven't tested)
 
 1. Prepare calibration images, you can randomly select 1000s images from your train set. For coco, you can also download my calibration images `coco_calib` from [GoogleDrive](https://drive.google.com/drive/folders/1s7jE9DtOngZMzJC1uL307J2MiaGwdRSI?usp=sharing) or [BaiduPan](https://pan.baidu.com/s/1GOm_-JobpyLMAqZWCDUhKg) pwd: a9wh
 
