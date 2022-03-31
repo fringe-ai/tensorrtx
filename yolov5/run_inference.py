@@ -366,17 +366,18 @@ if __name__ == "__main__":
     plugin_file = os.path.join(args['plugin_folder'],"libmyplugins.so")
     if not os.path.isfile(plugin_file):
         raise Exception(f'Not found plugin file: {plugin_file}')
+    
+    engine_file_path = args['engine_file']
+    if not os.path.isfile(engine_file_path):
+        raise Exception(f'Not found engine file: {engine_file_path}')
+    
     ctypes.CDLL(plugin_file)
     CONF_THRESH = args['conf_thresh']
     IOU_THRESHOLD = args['iou_thresh']
-    engine_file_path = args['engine_file']
     image_dir = args['image_path']
     output_dir = args['output_path']
     categories = args['class_names'].split(',')
     print('class names: ', categories)
-    
-    if not os.path.isfile(engine_file_path):
-        raise Exception(f'Not found plugin file: {engine_file_path}')
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)

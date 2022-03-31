@@ -32,10 +32,15 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 cuda_add_executable(yolov5 calibrator.cpp yolov5.cpp preprocess.cu)
 
+find_package(PkgConfig)
+pkg_check_modules(YAMLCPP REQUIRED yaml-cpp>=0.5)
+include_directories(${YAMLCPP_INCLUDE_DIRS})
+
 target_link_libraries(yolov5 nvinfer)
 target_link_libraries(yolov5 cudart)
 target_link_libraries(yolov5 myplugins)
 target_link_libraries(yolov5 ${OpenCV_LIBS})
+target_link_libraries(yolov5 ${YAMLCPP_LIBRARIES})
 
 if(UNIX)
 add_definitions(-O2 -pthread)

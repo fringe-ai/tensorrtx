@@ -11,22 +11,22 @@
 
 using namespace nvinfer1;
 
-cv::Rect get_rect(cv::Mat& img, float bbox[4]) {
+cv::Rect get_rect(cv::Mat& img, float bbox[4], int INPUT_H, int INPUT_W) {
     float l, r, t, b;
-    float r_w = Yolo::INPUT_W / (img.cols * 1.0);
-    float r_h = Yolo::INPUT_H / (img.rows * 1.0);
+    float r_w = INPUT_W / (img.cols * 1.0);
+    float r_h = INPUT_H / (img.rows * 1.0);
     if (r_h > r_w) {
         l = bbox[0] - bbox[2] / 2.f;
         r = bbox[0] + bbox[2] / 2.f;
-        t = bbox[1] - bbox[3] / 2.f - (Yolo::INPUT_H - r_w * img.rows) / 2;
-        b = bbox[1] + bbox[3] / 2.f - (Yolo::INPUT_H - r_w * img.rows) / 2;
+        t = bbox[1] - bbox[3] / 2.f - (INPUT_H - r_w * img.rows) / 2;
+        b = bbox[1] + bbox[3] / 2.f - (INPUT_H - r_w * img.rows) / 2;
         l = l / r_w;
         r = r / r_w;
         t = t / r_w;
         b = b / r_w;
     } else {
-        l = bbox[0] - bbox[2] / 2.f - (Yolo::INPUT_W - r_h * img.cols) / 2;
-        r = bbox[0] + bbox[2] / 2.f - (Yolo::INPUT_W - r_h * img.cols) / 2;
+        l = bbox[0] - bbox[2] / 2.f - (INPUT_W - r_h * img.cols) / 2;
+        r = bbox[0] + bbox[2] / 2.f - (INPUT_W - r_h * img.cols) / 2;
         t = bbox[1] - bbox[3] / 2.f;
         b = bbox[1] + bbox[3] / 2.f;
         l = l / r_h;
@@ -289,11 +289,13 @@ std::vector<std::vector<float>> getAnchors(std::map<std::string, Weights>& weigh
     return anchors;
 }
 
-IPluginV2Layer* addYoLoLayer(INetworkDefinition *network, std::map<std::string, Weights>& weightMap, std::string lname, std::vector<IConvolutionLayer*> dets) {
+IPluginV2Layer* addYoLoLayer(INetworkDefinition *network, const int netinfo[], std::map<std::string, Weights>& weightMap, std::string lname, std::vector<IConvolutionLayer*> dets) {
     auto creator = getPluginRegistry()->getPluginCreator("YoloLayer_TRT", "1");
     auto anchors = getAnchors(weightMap, lname);
     PluginField plugin_fields[2];
-    int netinfo[4] = {Yolo::CLASS_NUM, Yolo::INPUT_W, Yolo::INPUT_H, Yolo::MAX_OUTPUT_BBOX_COUNT};
+    //int netinfo[4] = {CLASS_NUM, INPUT_W, INPUT_H, MAX_OUTPUT_BBOX_COUNT};
+    int INPUT_W = netinfo[1];
+    int INPUT_H = netinfo[2];
     plugin_fields[0].data = netinfo;
     plugin_fields[0].length = 4;
     plugin_fields[0].name = "netinfo";
@@ -302,8 +304,8 @@ IPluginV2Layer* addYoLoLayer(INetworkDefinition *network, std::map<std::string, 
     std::vector<Yolo::YoloKernel> kernels;
     for (size_t i = 0; i < anchors.size(); i++) {
         Yolo::YoloKernel kernel;
-        kernel.width = Yolo::INPUT_W / scale;
-        kernel.height = Yolo::INPUT_H / scale;
+        kernel.width = INPUT_W / scale;
+        kernel.height = INPUT_H / scale;
         memcpy(kernel.anchors, &anchors[i][0], anchors[i].size() * sizeof(float));
         kernels.push_back(kernel);
         scale *= 2;
