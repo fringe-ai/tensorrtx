@@ -2,7 +2,6 @@ import os
 import subprocess
 import yaml
 
-# activate the yolo env FIRST!
 
 data_path = './data/nordson_2022-03-24_split_0.2/test'
 build_path = './build'
