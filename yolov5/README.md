@@ -9,10 +9,12 @@ https://github.com/lmitechnologies/yolov5/blob/master/TRAIN_AND_TEST.md
 ## How to convert trained yolo model to tensorRT
 The followings assume that the current working directory is `~/projects`, and the trained yolo weights are saved as `~/projects/best.pt`.
 
-1. Clone the repos
+1. Clone the source code repos
+
+The following example clones the repos to `~/repos`.
 ```bash
-# cd to your working directory
-cd ~/projects
+# cd to the directory where you want to clone the repos
+cd ~/repos
 
 # clone the {tensorrtx}/yolov5 repo:
 git clone https://github.com/lmitechnologies/tensorrtx.git
@@ -24,8 +26,11 @@ git clone https://github.com/lmitechnologies/yolov5.git
 2. Generate `example.wts` from pytorch weights `best.pt`
 
 ```bash
+# cd to working directory
+cd ~/projects
+
 # activate the yolo env
-source yolov5/yolo.env
+source ~/repos/yolov5/yolo.env
 
 # generate a .wts file
 python3 -m gen_wts.py -w best.pt -o example.wts
@@ -48,7 +53,7 @@ Create your own config file and save it as `~/projects/example.yaml`.
 ```bash
 mkdir build
 cd build
-cmake ../tensorrtx/yolov5
+cmake ~/repos/tensorrtx/yolov5
 make
 
 #build the tensorRT engine
@@ -59,7 +64,7 @@ The engine is saved as `./build/out.engine`.
 
 5. run the inference
 ```bash
-python3 tensorrtx/yolov5/run_inference.py -e ./build/out.engine -p ./build -i DATA_PATH -c CLASS_NAMES -o DESTINATION
+python3 ~/repos/tensorrtx/yolov5/run_inference.py -e ./build/out.engine -p ./build -i DATA_PATH -c CLASS_NAMES -o DESTINATION
 ```
 where `DATA_PATH` is the path to the image folder, `CLASS_NAMES` is a string containing all class names separated by a comma, `DESTINATION` is the output path.
 
