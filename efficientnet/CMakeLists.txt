@@ -19,9 +19,15 @@ link_directories(/usr/local/cuda/lib64)
 include_directories(/usr/include/x86_64-linux-gnu/)
 link_directories(/usr/lib/x86_64-linux-gnu/)
 
+#yaml-cpp
+find_package(PkgConfig)
+pkg_check_modules(YAMLCPP REQUIRED yaml-cpp>=0.5)
+include_directories(${YAMLCPP_INCLUDE_DIRS})
+
 add_executable(efficientnet  ${PROJECT_SOURCE_DIR}/efficientnet.cpp)
 target_link_libraries(efficientnet nvinfer)
 target_link_libraries(efficientnet cudart)
+target_link_libraries(efficientnet ${YAMLCPP_LIBRARIES})
 
 add_definitions(-O2 -pthread)
 

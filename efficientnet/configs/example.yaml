@@ -1,0 +1,6 @@
+EFFICIENT_NET:
+  backbone: b0  # backbones: [b0 b1 b2 b3 ... b7]
+  input_h: 512
+  input_w: 512
+  num_classes: 2
+  batch_size: 1
