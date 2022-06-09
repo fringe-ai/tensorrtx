@@ -8,11 +8,12 @@
 #include <vector>
 #include <chrono>
 #include "utils.hpp"
+#include <yaml-cpp/yaml.h>
+#include <stdexcept>
 
 #define USE_FP16 //USE_FP16
 #define INPUT_NAME "data"
 #define OUTPUT_NAME "prob"
-#define MAX_BATCH_SIZE 1
 
 using namespace nvinfer1;
 static Logger gLogger;
@@ -27,21 +28,6 @@ static std::vector<BlockArgs>
 		BlockArgs{4, 5, 2, 6, 112, 192, 0.25, true},
 		BlockArgs{1, 3, 1, 6, 192, 320, 0.25, true}};
 
-static std::map<std::string, GlobalParams>
-	global_params_map = {
-		// input_h,input_w,num_classes,batch_norm_epsilon,
-		// width_coefficient,depth_coefficient,depth_divisor, min_depth
-		{"b0", GlobalParams{224, 224, 5, 0.001, 1.0, 1.0, 8, -1}},
-		{"b1", GlobalParams{240, 240, 1000, 0.001, 1.0, 1.1, 8, -1}},
-		{"b2", GlobalParams{260, 260, 1000, 0.001, 1.1, 1.2, 8, -1}},
-		{"b3", GlobalParams{300, 300, 1000, 0.001, 1.2, 1.4, 8, -1}},
-		{"b4", GlobalParams{380, 380, 1000, 0.001, 1.4, 1.8, 8, -1}},
-		{"b5", GlobalParams{456, 456, 1000, 0.001, 1.6, 2.2, 8, -1}},
-		{"b6", GlobalParams{528, 528, 1000, 0.001, 1.8, 2.6, 8, -1}},
-		{"b7", GlobalParams{600, 600, 1000, 0.001, 2.0, 3.1, 8, -1}},
-		{"b8", GlobalParams{672, 672, 1000, 0.001, 2.2, 3.6, 8, -1}},
-		{"l2", GlobalParams{800, 800, 1000, 0.001, 4.3, 5.3, 8, -1}},
-};
 
 ICudaEngine *createEngine(unsigned int maxBatchSize, IBuilder *builder, IBuilderConfig *config, DataType dt, std::string path_wts, std::vector<BlockArgs> block_args_list, GlobalParams global_params)
 {
@@ -171,44 +157,85 @@ void doInference(IExecutionContext &context, float *input, float *output, int ba
 	CHECK(cudaFree(buffers[outputIndex]));
 }
 
-bool parse_args(int argc, char **argv, std::string &wts, std::string &engine, std::string &backbone)
-{
-	if (std::string(argv[1]) == "-s" && argc == 5)
-	{
-		wts = std::string(argv[2]);
-		engine = std::string(argv[3]);
-		backbone = std::string(argv[4]);
-	}
-	else if (std::string(argv[1]) == "-d" && argc == 4)
-	{
-		engine = std::string(argv[2]);
-		backbone = std::string(argv[3]);
-	}
+GlobalParams get_globalParam(std::string backbone, int h, int w, int num_class) {
+	if (backbone =="b0") 
+		return GlobalParams{h, w, num_class, 0.001, 1.0, 1.0, 8, -1};
+	else if (backbone == "b1")
+		return GlobalParams{h, w, num_class, 0.001, 1.0, 1.1, 8, -1};
+	else if (backbone == "b2")
+		return GlobalParams{h, w, num_class, 0.001, 1.1, 1.2, 8, -1};
+	else if (backbone == "b3")
+		return GlobalParams{h, w, num_class, 0.001, 1.2, 1.4, 8, -1};
+	else if (backbone == "b4")
+		return GlobalParams{h, w, num_class, 0.001, 1.4, 1.8, 8, -1};
+	else if (backbone == "b5")
+		return GlobalParams{h, w, num_class, 0.001, 1.6, 2.2, 8, -1};
+	else if (backbone == "b6")
+		return GlobalParams{h, w, num_class, 0.001, 1.8, 2.6, 8, -1};
+	else if (backbone == "b7")
+		return GlobalParams{h, w, num_class, 0.001, 2.0, 3.1, 8, -1};
+	else if (backbone == "b8")
+		return GlobalParams{h, w, num_class, 0.001, 2.2, 3.6, 8, -1};
+	else if (backbone == "l2")
+		return GlobalParams{h, w, num_class, 0.001, 4.3, 5.3, 8, -1};
 	else
-	{
-		return false;
-	}
-	return true;
+		throw std::runtime_error(std::string("invalid backbone: ") + backbone);
+}
+
+bool parse_yaml(std::string yaml_name, int& h, int& w, int& class_num, int& batch_size, std::string& backbone){
+    YAML::Node config = YAML::LoadFile(yaml_name.c_str());
+
+    // loading optional arguments
+    std::cout << "loaded from " << yaml_name << ":" << std::endl;
+    if (config["EFFICIENT_NET"]["input_h"]){
+        h = config["EFFICIENT_NET"]["input_h"].as<int>();
+        std::cout << "input_h: " << h << std::endl;
+    }
+    if (config["EFFICIENT_NET"]["input_w"]){
+        w = config["EFFICIENT_NET"]["input_w"].as<int>();
+        std::cout << "input_w: " << w << std::endl;
+    }
+    if (config["EFFICIENT_NET"]["num_classes"]){
+        class_num = config["EFFICIENT_NET"]["num_classes"].as<int>();
+        std::cout << "num_classes: " << class_num << std::endl;
+    }
+    if (config["EFFICIENT_NET"]["batch_size"]){
+        batch_size = config["EFFICIENT_NET"]["batch_size"].as<int>();
+        std::cout << "batch_size: " << batch_size << std::endl;
+    }
+
+    // error catching
+    if (!config["EFFICIENT_NET"]["backbone"]){
+        std::cerr << "Invalid yaml file: failed to find 'EFFICIENT_NET':'backbone'. " << std::endl;
+        return false;
+    }
+
+    backbone = config["EFFICIENT_NET"]["backbone"].as<std::string>();
+    std::cout << "EFFICIENT_NET backbone: " << backbone << std::endl;
+    return true;
 }
 
 int main(int argc, char **argv)
 {
-	std::string wtsPath = "";
-	std::string engine_name = "";
-	std::string backbone = "";
-	if (!parse_args(argc, argv, wtsPath, engine_name, backbone))
-	{
-		std::cerr << "arguments not right!" << std::endl;
-		std::cerr << "./efficientnet -s [.wts] [.engine] [b0 b1 b2 b3 ... b7]  // serialize model to engine file" << std::endl;
-		std::cerr << "./efficientnet -d [.engine] [b0 b1 b2 b3 ... b7]   // deserialize engine file and run inference" << std::endl;
-		return -1;
-	}
-	GlobalParams global_params = global_params_map[backbone];
+	if (argc!=7 || std::string(argv[1])!="-c" || std::string(argv[3])!="-w" || std::string(argv[5])!="-o") {
+        std::cerr << "arguments not right!" << std::endl;
+        std::cerr << "./efficientnet -c [.yaml] -w [.wts] -o [.engine]" << std::endl;
+        return -1;
+    }
+
+	std::string yaml_name(argv[2]);
+    int h,w,class_num,batch_size;
+    std::string backbone,wts_name(argv[4]),engine_name(argv[6]);
+    if (!parse_yaml(yaml_name, h, w, class_num, batch_size, backbone)){
+        return -1;
+    }
+
+	GlobalParams global_params = get_globalParam(backbone,h,w,class_num);
 	// create a model using the API directly and serialize it to a stream
-	if (!wtsPath.empty())
+	if (!wts_name.empty())
 	{
 		IHostMemory *modelStream{nullptr};
-		APIToModel(MAX_BATCH_SIZE, &modelStream, wtsPath, block_args_list, global_params);
+		APIToModel(batch_size, &modelStream, wts_name, block_args_list, global_params);
 		assert(modelStream != nullptr);
 
 		std::ofstream p(engine_name, std::ios::binary);
@@ -219,62 +246,7 @@ int main(int argc, char **argv)
 		}
 		p.write(reinterpret_cast<const char *>(modelStream->data()), modelStream->size());
 		modelStream->destroy();
-		return 1;
+		return 0;
 	}
-
-	char *trtModelStream{nullptr};
-	size_t size{0};
-
-	std::ifstream file(engine_name, std::ios::binary);
-	if (file.good())
-	{
-		file.seekg(0, file.end);
-		size = file.tellg();
-		file.seekg(0, file.beg);
-		trtModelStream = new char[size];
-		assert(trtModelStream);
-		file.read(trtModelStream, size);
-		file.close();
-	}
-	else
-	{
-		std::cerr << "could not open plan file" << std::endl;
-		return -1;
-	}
-
-	// dummy input
-	float *data = new float[3 * global_params.input_h * global_params.input_w];
-	for (int i = 0; i < 3 * global_params.input_h * global_params.input_w; i++)
-		data[i] = 0.1;
-
-	IRuntime *runtime = createInferRuntime(gLogger);
-	assert(runtime != nullptr);
-	ICudaEngine *engine = runtime->deserializeCudaEngine(trtModelStream, size, nullptr);
-	assert(engine != nullptr);
-	IExecutionContext *context = engine->createExecutionContext();
-	assert(context != nullptr);
-	delete[] trtModelStream;
-
-	// Run inference
-	float *prob = new float[global_params.num_classes];
-	for (int i = 0; i < 100; i++)
-	{
-		auto start = std::chrono::system_clock::now();
-		doInference(*context, data, prob, 1, global_params);
-		auto end = std::chrono::system_clock::now();
-		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
-	}
-	for (unsigned int i = 0; i < global_params.num_classes; i++)
-	{
-		std::cout << prob[i] << ", ";
-	}
-	std::cout << std::endl;
-	// Destroy the engine
-	context->destroy();
-	engine->destroy();
-	runtime->destroy();
-	delete data;
-	delete prob;
-
 	return 0;
 }
