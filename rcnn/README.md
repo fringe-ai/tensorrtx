@@ -42,7 +42,7 @@ python gen_wts.py
 // update parameters in rcnn.cpp if your model is trained on custom dataset.The parameters are corresponding to config in detectron2.
 mkdir build
 cd build
-cmake ..
+cmake .. -DCUDA_NVCC_FLAGS="--expt-extended-lambda"
 make
 sudo ./rcnn -s [.wts] [m] // serialize model to plan file, add m for maskrcnn
 sudo ./rcnn -d [.engine] [image folder] [m] // deserialize and run inference, the images in [image folder] will be processed. add m for maskrcnn
