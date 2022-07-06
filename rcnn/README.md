@@ -25,19 +25,16 @@ TensorRT7.2 is recomended because Resize layer in 7.0 with kLINEAR mode is a lit
 // git clone -b v0.4 https://github.com/facebookresearch/detectron2.git
 // go to facebookresearch/detectron2
 python setup.py build develop // more install information see https://github.com/facebookresearch/detectron2/blob/master/INSTALL.md
-// download https://dl.fbaipublicfiles.com/detectron2/COCO-Detection/faster_rcnn_R_50_C4_1x/137257644/model_final_721ade.pkl
-// download https://raw.githubusercontent.com/freedenS/TestImage/main/demo.jpg
-// copy tensorrtx/rcnn/gen_wts.py and demo.jpg into facebookresearch/detectron2
-// ensure cfg.MODEL.WEIGHTS in gen_wts.py is correct
-// go to facebookresearch/detectron2
-python gen_wts.py
-// a file 'faster.wts' will be generated.
+
+// ensure that the files specified in the example.yaml exist!
+python gen_wts.py --input ./configs/example.yaml --output mask.wts
+// a file 'mask.wts' will be generated.
 ```
 
 2. build tensorrtx/rcnn and run
 
 ```
-// put faster.wts into tensorrtx/rcnn
+// put mask.wts into tensorrtx/rcnn
 // go to tensorrtx/rcnn
 // update parameters in rcnn.cpp if your model is trained on custom dataset.The parameters are corresponding to config in detectron2.
 mkdir build
@@ -47,8 +44,8 @@ make
 sudo ./rcnn -s [.wts] [m] // serialize model to plan file, add m for maskrcnn
 sudo ./rcnn -d [.engine] [image folder] [m] // deserialize and run inference, the images in [image folder] will be processed. add m for maskrcnn
 // For example
-sudo ./rcnn -s faster.wts faster.engine
-sudo ./rcnn -d faster.engine ../samples
+// sudo ./rcnn -s faster.wts faster.engine
+// sudo ./rcnn -d faster.engine ../samples
 // sudo ./rcnn -s mask.wts mask.engine m
 // sudo ./rcnn -d mask.engine ../samples m
 ```
