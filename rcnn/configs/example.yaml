@@ -1,0 +1,12 @@
+MODEL:
+  WEIGHTS: './model_final.pth'
+  DEVICE: 'cpu'
+  ROI_HEADS:
+    BATCH_SIZE_PER_IMAGE: 64
+    NUM_CLASSES: 2
+  RESNETS:
+    DEPTH: 18
+    STRIDE_IN_1X1: False
+    RES2_OUT_CHANNELS: 64
+  PIXEL_MEAN: [0, 0, 0]
+  PIXEL_STD: [1, 1, 1]
