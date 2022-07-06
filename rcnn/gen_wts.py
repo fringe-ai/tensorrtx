@@ -1,8 +1,10 @@
 from detectron2.layers import Conv2d
 from torch import nn
 import torch
-import numpy as np
 import struct
+import os
+
+
 def fuse_conv_and_bn(conv):
     # Fuse convolution and batchnorm layers https://tehnokv.com/posts/fusing-batchnorm-and-conv/
     bn = conv.norm
@@ -35,9 +37,13 @@ def fuse_bn(model):
             fuse_bn(child)
 
 def gen_wts(model, filename):
-    f = open('./' + filename + '.wts', 'w')
+    root,ext = os.path.splitext(filename)
+    if ext == '.wts':
+        filename = root 
+    f = open(filename + '.wts', 'w')
     f.write('{}\n'.format(len(model.state_dict().keys())))
     for k, v in model.state_dict().items():
+        print(f'{k}: {v.shape}')
         vr = v.reshape(-1).cpu().numpy()
         f.write('{} {} '.format(k, len(vr)))
         for vv in vr:
@@ -46,38 +52,55 @@ def gen_wts(model, filename):
         f.write('\n')
     f.close()
 
+
 # construct model
+from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.modeling import build_model
 from detectron2.checkpoint import DetectionCheckpointer
-cfg = get_cfg()
-cfg.merge_from_file('./configs/COCO-Detection/faster_rcnn_R_50_C4_1x.yaml')
-cfg.MODEL.WEIGHTS = './model_final_721ade.pkl'
-cfg.MODEL.DEVICE = 'cpu'
-model = build_model(cfg)
-DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
-model.eval()
-fuse_bn(model)
-gen_wts(model, 'faster')
+import argparse
 
-# test data
-# from detectron2.data.detection_utils import read_image
-# from detectron2.data import transforms as T
-# import cv2
-# original_image = cv2.imread('./demo.jpg')
-# original_image = original_image.astype('float32')
 
-# transform_gen = T.ResizeShortestEdge(
-#             [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
-#         )
-# height, width = original_image.shape[:2]
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--input', required=True, help='the input yaml file')
+    ap.add_argument('--output', required=True, help='the output .wts file')
+    ap.add_argument('--base_yaml', default="mask_rcnn_R_50_C4_1x.yaml", help='the base yaml file provided in https://github.com/facebookresearch/detectron2/tree/main/configs/COCO-InstanceSegmentation')
+    args = vars(ap.parse_args())
+    
+    # load configs
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/"+args['base_yaml']))
+    cfg.merge_from_file(args['input'])
+    
+    # create model
+    model = build_model(cfg)
+    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
+    model.eval()
+    
+    # generate weights
+    fuse_bn(model)
+    gen_wts(model, args['output'])
+    print('done')
+    
+    # test data
+    # from detectron2.data.detection_utils import read_image
+    # from detectron2.data import transforms as T
+    # import cv2
+    # original_image = cv2.imread('./demo.jpg')
+    # original_image = original_image.astype('float32')
 
-# image = transform_gen.get_transform(original_image).apply_image(original_image)
-# image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+    # transform_gen = T.ResizeShortestEdge(
+    #             [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
+    #         )
+    # height, width = original_image.shape[:2]
 
-# # model test
-# inputs = {"image": image, "height": height, "width": width}
+    # image = transform_gen.get_transform(original_image).apply_image(original_image)
+    # image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
-# with torch.no_grad():
-#     predictions = model([inputs])[0]
-# print (predictions)
+    # # model test
+    # inputs = {"image": image, "height": height, "width": width}
+
+    # with torch.no_grad():
+    #     predictions = model([inputs])[0]
+    # print (predictions)
