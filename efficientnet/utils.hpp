@@ -73,6 +73,7 @@ struct BlockArgs
 
 struct GlobalParams
 {
+    int in_channels;
     int input_h;
     int input_w;
     int num_classes;

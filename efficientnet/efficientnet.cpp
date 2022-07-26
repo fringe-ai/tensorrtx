@@ -37,7 +37,7 @@ ICudaEngine *createEngine(unsigned int maxBatchSize, IBuilder *builder, IBuilder
 	std::map<std::string, Weights> weightMap = loadWeights(path_wts);
 	Weights emptywts{DataType::kFLOAT, nullptr, 0};
 	INetworkDefinition *network = builder->createNetworkV2(0U);
-	ITensor *data = network->addInput(INPUT_NAME, dt, Dims3{3, global_params.input_h, global_params.input_w});
+	ITensor *data = network->addInput(INPUT_NAME, dt, Dims3{global_params.in_channels, global_params.input_h, global_params.input_w});
 	assert(data);
 
 	int out_channels = roundFilters(32, global_params);
@@ -157,32 +157,32 @@ void doInference(IExecutionContext &context, float *input, float *output, int ba
 	CHECK(cudaFree(buffers[outputIndex]));
 }
 
-GlobalParams get_globalParam(std::string backbone, int h, int w, int num_class) {
+GlobalParams get_globalParam(std::string backbone, int inc, int h, int w, int num_class) {
 	if (backbone =="b0") 
-		return GlobalParams{h, w, num_class, 0.001, 1.0, 1.0, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.0, 1.0, 8, -1};
 	else if (backbone == "b1")
-		return GlobalParams{h, w, num_class, 0.001, 1.0, 1.1, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.0, 1.1, 8, -1};
 	else if (backbone == "b2")
-		return GlobalParams{h, w, num_class, 0.001, 1.1, 1.2, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.1, 1.2, 8, -1};
 	else if (backbone == "b3")
-		return GlobalParams{h, w, num_class, 0.001, 1.2, 1.4, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.2, 1.4, 8, -1};
 	else if (backbone == "b4")
-		return GlobalParams{h, w, num_class, 0.001, 1.4, 1.8, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.4, 1.8, 8, -1};
 	else if (backbone == "b5")
-		return GlobalParams{h, w, num_class, 0.001, 1.6, 2.2, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.6, 2.2, 8, -1};
 	else if (backbone == "b6")
-		return GlobalParams{h, w, num_class, 0.001, 1.8, 2.6, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 1.8, 2.6, 8, -1};
 	else if (backbone == "b7")
-		return GlobalParams{h, w, num_class, 0.001, 2.0, 3.1, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 2.0, 3.1, 8, -1};
 	else if (backbone == "b8")
-		return GlobalParams{h, w, num_class, 0.001, 2.2, 3.6, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 2.2, 3.6, 8, -1};
 	else if (backbone == "l2")
-		return GlobalParams{h, w, num_class, 0.001, 4.3, 5.3, 8, -1};
+		return GlobalParams{inc, h, w, num_class, 0.001, 4.3, 5.3, 8, -1};
 	else
 		throw std::runtime_error(std::string("invalid backbone: ") + backbone);
 }
 
-bool parse_yaml(std::string yaml_name, int& h, int& w, int& class_num, int& batch_size, std::string& backbone){
+bool parse_yaml(std::string yaml_name, int& inc, int& h, int& w, int& class_num, int& batch_size, std::string& backbone){
     YAML::Node config = YAML::LoadFile(yaml_name.c_str());
 
     // loading optional arguments
@@ -202,6 +202,10 @@ bool parse_yaml(std::string yaml_name, int& h, int& w, int& class_num, int& batc
     if (config["EFFICIENT_NET"]["batch_size"]){
         batch_size = config["EFFICIENT_NET"]["batch_size"].as<int>();
         std::cout << "batch_size: " << batch_size << std::endl;
+    }
+	if (config["EFFICIENT_NET"]["in_channels"]){
+        inc = config["EFFICIENT_NET"]["in_channels"].as<int>();
+        std::cout << "in_channels: " << inc << std::endl;
     }
 
     // error catching
@@ -224,13 +228,13 @@ int main(int argc, char **argv)
     }
 
 	std::string yaml_name(argv[2]);
-    int h,w,class_num,batch_size;
+    int inc,h,w,class_num,batch_size;
     std::string backbone,wts_name(argv[4]),engine_name(argv[6]);
-    if (!parse_yaml(yaml_name, h, w, class_num, batch_size, backbone)){
+    if (!parse_yaml(yaml_name, inc, h, w, class_num, batch_size, backbone)){
         return -1;
     }
 
-	GlobalParams global_params = get_globalParam(backbone,h,w,class_num);
+	GlobalParams global_params = get_globalParam(backbone,inc,h,w,class_num);
 	// create a model using the API directly and serialize it to a stream
 	if (!wts_name.empty())
 	{
