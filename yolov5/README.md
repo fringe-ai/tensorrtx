@@ -55,7 +55,7 @@ make
 
 #build the tensorRT engine
 cd ..
-./build/yolov5 '-c' example.yaml '-w' example.wts '-o' ./build/out.engine
+./build/yolov5 -c example.yaml -w example.wts -o ./build/out.engine
 ```
 The engine is saved as `./build/out.engine`.
 
