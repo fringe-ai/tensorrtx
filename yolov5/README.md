@@ -16,24 +16,21 @@ The following example clones the repos to `~/repos`.
 # cd to the directory where you want to clone the repos
 cd ~/repos
 
-# clone the {tensorrtx}/yolov5 repo:
-git clone https://github.com/lmitechnologies/tensorrtx.git
+# clone the tensorrtx repo:
+git clone git@github.com:lmitechnologies/tensorrtx.git
 
-# clone the {lmi}/yolov5 repo:
-git clone https://github.com/lmitechnologies/yolov5.git
+# clone the LMI_AI_SOLUTIONS repo:
+git clone git@github.com:lmitechnologies/LMI_AI_Solutions.git
 ```
 
 2. Generate `example.wts` from pytorch weights `best.pt`
 
 ```bash
-# cd to working directory
-cd ~/projects
-
-# activate the yolo env
-source ~/repos/yolov5/yolo.env
+# activate the lmi_ai env
+source PATH_TO_REPO/LMI_AI_Solutions/lmi_ai.env
 
 # generate a .wts file
-python3 -m gen_wts.py -w best.pt -o example.wts
+python3 -m yolov5.gen_wts -w best.pt -o example.wts
 ```
 
 3. Modify the yaml config
@@ -49,7 +46,7 @@ YOLO:
 ```
 Create your own config file and save it as `~/projects/example.yaml`.
 
-4. build `{tensorrtx}/yolov5` and generate tensorRT engine
+4. build and generate tensorRT engine
 ```bash
 mkdir build
 cd build
