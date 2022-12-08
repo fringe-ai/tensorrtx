@@ -45,7 +45,7 @@ YOLO:
   batch_size: 1
   max_output_bbox_count: 1000
 ```
-Note: If set `max_output_bbox_count` to a small number, the model won't be able to find all the objects!
+**Note: If set `max_output_bbox_count` to a small number, the model won't be able to find all the objects!**
 Create your own config file and save it as `~/projects/example.yaml`.
 
 4. build and generate tensorRT engine
