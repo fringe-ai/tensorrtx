@@ -12,10 +12,8 @@
 #include "BatchedNmsPlugin.h"
 #include "./cuda_utils.h"
 
-#ifdef CUDA_11
 #include <cub/device/device_radix_sort.cuh>
-#else
-#include <thrust/system/cuda/detail/cub/device/device_radix_sort.cuh>
+
 
 
 namespace nvinfer1 {
