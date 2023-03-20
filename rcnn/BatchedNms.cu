@@ -3,7 +3,6 @@
 #include <thrust/sequence.h>
 #include <thrust/execution_policy.h>
 #include <thrust/gather.h>
-#include <thrust/system/cuda/detail/cub/device/device_radix_sort.cuh>
 #include <cmath>
 #include <algorithm>
 #include <iostream>
@@ -12,6 +11,12 @@
 #include <vector>
 #include "BatchedNmsPlugin.h"
 #include "./cuda_utils.h"
+
+#ifdef CUDA_11
+#include <cub/device/device_radix_sort.cuh>
+#else
+#include <thrust/system/cuda/detail/cub/device/device_radix_sort.cuh>
+
 
 namespace nvinfer1 {
 
